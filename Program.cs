@@ -12,7 +12,7 @@ builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
 //Подключение в БД
-builder.Services.AddDbContext<TestDBContex>(options => options.UseSqlServer(
+builder.Services.AddDbContext<CinemaDBContex>(options => options.UseSqlServer(
 builder.Configuration.GetConnectionString("DefaultConnection")
 ));
 

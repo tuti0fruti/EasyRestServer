@@ -12,6 +12,7 @@ namespace WebApplication1.Controllers
     {
         //Получение доступа к БД
         private TestDBContex _testDBContex;
+
         public UserController(TestDBContex testDBContex)
         {
             _testDBContex = testDBContex;
