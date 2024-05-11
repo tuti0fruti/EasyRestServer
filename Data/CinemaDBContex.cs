@@ -20,6 +20,7 @@ namespace WebApplication1.Data
         public DbSet<TypeshowData> Тип_Показа { get; set; }
         public DbSet<TicketsaleData> Продажа_Билета { get; set; }
         public DbSet<DiscountsData> Скидки { get; set; }
+        public DbSet<UsersData> Users { get; set; }
 
         
     }

@@ -1,37 +1,17 @@
-﻿using Microsoft.AspNetCore.Http;
-using Microsoft.AspNetCore.Mvc;
-using Newtonsoft.Json;
-using System.Collections.Generic;
+﻿using Microsoft.AspNetCore.Mvc;
+using System.Globalization;
+using System.Security.Cryptography;
+using System.Text;
 using WebApplication1.Data;
+using WebApplication1.Models;
 
 namespace WebApplication1.Controllers
 {
-    public class price_time
+    record Person(string Name, int Age);
+    public class LoginModel
     {
-        public price_time(TimeOnly time, int price) 
-        { 
-            this.time = time;
-            this.price = price;
-        } 
-        public TimeOnly time { get; set; }
-        public int price { get; set; }
-    }
-    public class Films_answer
-    {
-        public Films_answer(string films_name, string films_duration, string films_type, string films_country, List<price_time> price_time) 
-        { 
-            this.films_name = films_name;
-            this.films_country = films_country;
-            this.films_duration = films_duration;
-            this.films_type = films_type;
-
-            this.price_time = price_time;
-        }
-        public string films_name { get; set; }
-        public string films_country { get; set; }
-        public string films_duration { get; set; }
-        public string films_type { get; set;}
-        public List<price_time> price_time { get; set; }
+        public string Login { get; set; }
+        public string HashedPassword { get; set; }
     }
 
     [Route("api/[controller]")]
@@ -52,128 +32,57 @@ namespace WebApplication1.Controllers
         {
             try
             {
-                List<FilmsData> films = _cimenaDBContex.Фильмы.ToList();
-                List<TypeData> type = _cimenaDBContex.Жанры_Фильмы.ToList();
-                List<TypeNameData> type_name = _cimenaDBContex.Жанры.ToList();
-                List<CountryData> country = _cimenaDBContex.Страны.ToList();
-                List<SessionData> session = _cimenaDBContex.Сеансы.ToList();
+                List<FilmsData> Films = _cimenaDBContex.Фильмы.ToList();
+                List<TypeData> Type = _cimenaDBContex.Жанры_Фильмы.ToList();
+                List<TypeNameData> TypeName = _cimenaDBContex.Жанры.ToList();
+                List<CountryData> Country = _cimenaDBContex.Страны.ToList();
+                List<SessionData> Session = _cimenaDBContex.Сеансы.ToList();
                
-                List<HallData> hall = _cimenaDBContex.Зал.ToList();
-                List<TypeshowData> typeShow = _cimenaDBContex.Тип_Показа.ToList();
+                List<HallData> Hall = _cimenaDBContex.Зал.ToList();
+                List<TypeshowData> TypeShow = _cimenaDBContex.Тип_Показа.ToList();
                 List<TicketsaleData> TicketSale = _cimenaDBContex.Продажа_Билета.ToList();
                 List<DiscountsData> Discount = _cimenaDBContex.Скидки.ToList();
                 
-                //дописать проверки --------------
-                //проверка если нету пользователей
-                if (films.Count == 0)
+                
+                //проверка если нету фильмов
+                if (Films.Count == 0)
                 {
                     return StatusCode(404, "No films found");
                 }
 
-                List<Films_answer> films_today = new List<Films_answer>();
-                List<price_time> price_time = new List<price_time>();
+                var filmSessionInfo = (from film_join in _cimenaDBContex.Фильмы
+                                       join session_join in _cimenaDBContex.Сеансы on film_join.idФильмы equals session_join.Фильмы_idФильмы into filmSessions
+                                       from session_join in filmSessions.DefaultIfEmpty()
+                                       
+                                       join country_join in _cimenaDBContex.Страны on film_join.Страны_idСтраны equals country_join.idСтраны
+                                       join hall_join in _cimenaDBContex.Зал on session_join.Зал_idЗал equals hall_join.idЗал
+                                       join showType_join in _cimenaDBContex.Тип_Показа on hall_join.Тип_Показа_idТип_Показа equals showType_join.idТип_Показа
+                                       
+                                       where session_join.Время_Начала_Сеанса != null && session_join.Дата_Сеанса.Date == DateTime.Now.AddDays(Id).Date
+                                       group new { film_join, session_join, hall_join, showType_join, country_join }
+                                       by new { film_join.Название, film_join.Продолжительность, session_join.Время_Начала_Сеанса, film_join.Стоимость_Проката, showType_join.Добавочная_цена, country_join.НазваниеСтраны }
+                       into filmGroup
+                                       select new
+                                       {
+                                           name = filmGroup.Key.Название,
+                                           country = filmGroup.Key.НазваниеСтраны,
+                                           dura = filmGroup.Key.Продолжительность,
+                                           time_ = filmGroup.Key.Время_Начала_Сеанса,
+                                           price_ = filmGroup.Key.Стоимость_Проката + filmGroup.Key.Добавочная_цена
+                                       });
 
-
-                foreach (var film in films)
-                {
-                    string type_ = string.Empty;
-                    string country_ = string.Empty;
-
-                    
-                    bool flagSession = false;
-
-                    //прибавляю добавочную цену
-                    foreach (var session1 in session)
-                    {
-                        int price = film.Стоимость_Проката;
-
-                        foreach (var item in hall)
-                        {
-                            if (session1.Зал_idЗал == item.idЗал)
+                var groupedSessions = filmSessionInfo.GroupBy(
+                            session => new { session.name, session.country, session.dura },
+                            (key, sessions) => new
                             {
-                                foreach (var item1 in typeShow)
-                                {
-                                    if (item.Тип_Показа_idТип_Показа == item1.idТип_Показа)
-                                    {
-                                        price += item1.Добавочная_цена;
-                                    }
-                                    break;
-                                }
-                                break;
-                            }
-                        }
+                                key.name,
+                                key.country,
+                                key.dura,
+                                time_1 = sessions.Select(s => s.time_).ToList(),
+                                price_1 = sessions.Select(s => s.price_).ToList()
+                            });
 
-                        //вычитаем скидку
-                        foreach (var item in TicketSale)
-                        {
-                            if (session1.idСеанса == item.Сеансы_idСеанса)
-                            {
-                                foreach (var item1 in Discount)
-                                {
-                                    if (item.Скидки_idСкидка == item1.idСкидка)
-                                    {
-                                        price -= price * (item1.Процент_Скидки / 100);
-                                    }
-                                }
-                               
-                            }
-                        }
-
-                        price_time.Add(
-                            new price_time(session1.Время_Начала_Сеанса, price)
-                            );
-
-                        //Проверка есть сегодня сеансы или нет
-                        if (film.idФильмы == session1.Фильмы_idФильмы)
-                        {
-                            if (session1.Дата_Сеанса.ToShortDateString() == DateTime.Now.AddDays(Id).ToShortDateString())
-                            {
-                                flagSession = true;
-                                break;
-                            }
-                        }
-                    }
-                    
-                    if (!flagSession)
-                    {
-                        continue;
-                    }
-
-                    foreach (var item in country)
-                    {
-                        if (film.Страны_idСтраны == item.idСтраны)
-                        {
-                            country_ = item.Название;
-                            break;
-                        }
-                    }
-
-                    foreach (var item in type)
-                    {
-                        if (film.idФильмы == item.Фильмы_idФильмы)
-                        {
-                            foreach (var item1 in type_name)
-                            {
-                                if (item.Жанры_idЖанры == item1.idЖанры)
-                                {
-                                    type_ += item1.Название + " ";
-                                }
-                            }
-                        }
-                    }
-
-                    films_today.Add(
-                                new Films_answer(film.Название, film.Продолжительность.ToString(), type_, country_, price_time)
-                                );
-                }
-                
-                if (films_today.Count == 0)
-                {
-                    return StatusCode(404, "No films today found");
-                }
-                string json = JsonConvert.SerializeObject(films_today);
-
-                return new JsonResult(films_today);
+                return Ok(groupedSessions);
             }
             catch (Exception)
             {
@@ -181,5 +90,174 @@ namespace WebApplication1.Controllers
                 return StatusCode(500, "An error has occurred");
             }
         }
+        
+        [HttpGet("GetInformationNameFilm")]
+        public IActionResult Get()
+        {
+            try
+            {
+                List<FilmsData> Films = _cimenaDBContex.Фильмы.ToList();
+                
+                List<string> filmInfoName = new List<string>();
+
+                foreach (var item in Films)
+                {
+                    filmInfoName.Add(item.Название);
+                }
+
+                return Ok(filmInfoName);
+            }
+            catch (Exception)
+            {
+                //в случае неудачи вернем ошибку 500 - внутрения ошибка сервера
+                return StatusCode(500, "An error has occurred");
+            }
+        }
+        
+        [HttpGet("GetInformationHall")]
+        public IActionResult GetHall()
+        {
+            try
+            {
+                List<HallData> Hall = _cimenaDBContex.Зал.ToList();
+                
+                List<int> numberhall = new List<int>();
+
+                foreach (var item in Hall)
+                {
+                    numberhall.Add(item.idЗал);
+                }
+
+                return Ok(numberhall);
+            }
+            catch (Exception)
+            {
+                //в случае неудачи вернем ошибку 500 - внутрения ошибка сервера
+                return StatusCode(500, "An error has occurred");
+            }
+        }
+
+        [HttpPost("LoginAdm")]
+        public IActionResult Login(LoginModel model)
+        {
+            // Получаем данные из модели
+            string login = model.Login;
+            string hashedPassword = model.HashedPassword;
+
+            List<UsersData> users = _cimenaDBContex.Users.ToList();
+
+            if (users == null)
+            {
+                return BadRequest();
+            }
+
+
+            foreach (var item in users)
+            {
+                if (item.login_users == login)
+                {
+                    if (item.role == "admin")
+                    {
+                        if (VerifyPassword(item.password_users, hashedPassword))
+                        {
+                            // Возвращаем успешный статус или ошибку в зависимости от результата аутентификации
+                            return Ok();
+                        }   
+                    }
+                }
+            }
+            
+            return BadRequest();
+        }
+        
+        //Проверка пароля
+        public static bool VerifyPassword(string inputPassword, string hashedPassword)
+        {
+            // Создаем объект для вычисления хеша SHA256
+            using (SHA256 sha256 = SHA256.Create())
+            {
+                // Преобразуем входной пароль в массив байтов
+                byte[] inputBytes = Encoding.UTF8.GetBytes(inputPassword);
+
+                // Вычисляем хеш входного пароля
+                byte[] inputHashBytes = sha256.ComputeHash(inputBytes);
+
+                // Преобразуем массив байтов в строку HEX
+                StringBuilder inputBuilder = new StringBuilder();
+                for (int i = 0; i < inputHashBytes.Length; i++)
+                {
+                    inputBuilder.Append(inputHashBytes[i].ToString("x2"));
+                }
+
+                // Сравниваем хеши
+                return inputBuilder.ToString() == hashedPassword;
+            }
+        }
+
+        [HttpPost("CreateFilm")]
+        public IActionResult Create([FromBody] FilmsData film)
+        {
+            List<FilmsData> Films = _cimenaDBContex.Фильмы.ToList();
+
+            FilmsData new_film = new FilmsData();
+            new_film.idФильмы = Films.Count() + 1;
+            new_film.Название  = film.Название;
+            new_film.Продолжительность = film.Продолжительность;
+            new_film.Страны_idСтраны = film.Страны_idСтраны + 1;
+            new_film.Описание = film.Описание;
+            new_film.Возрастное_ограничение = film.Возрастное_ограничение;
+            new_film.Дата_Проката  = film.Дата_Проката;
+            new_film.Стоимость_Проката  = film.Стоимость_Проката;
+            
+            try
+            {
+                //добавим нового пользователя в БД
+                _cimenaDBContex.Фильмы.Add(new_film);
+                _cimenaDBContex.SaveChanges();
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, "An error has occurred");
+            }
+
+            return Ok();
+        }
+        
+        [HttpPost("CreateSession")]
+        public IActionResult Create([FromBody] SessionRequest session)
+        {
+
+            List<SessionData> Session = _cimenaDBContex.Сеансы.ToList();
+
+            SessionData new_session = new SessionData();
+            new_session.Дата_Сеанса = session.Дата_Сеанса;
+            new_session.Время_Начала_Сеанса = TimeOnly.ParseExact(session.Время_Начала_Сеанса, "HH:mm", CultureInfo.InvariantCulture);
+            new_session.Фильмы_idФильмы = session.Фильмы_idФильмы + 1;
+            new_session.Зал_idЗал = session.Зал_idЗал + 1;
+
+            //dkfhdksflh
+
+            //try
+            //{
+            //    //добавим нового пользователя в БД
+            //    _cimenaDBContex.Фильмы.Add(new_film);
+            //    _cimenaDBContex.SaveChanges();
+            //}
+            //catch (Exception ex)
+            //{
+            //    return StatusCode(500, "An error has occurred");
+            //}
+
+
+            return Ok();
+        }
+
+
+
+
+
+
+
+
     }
 }

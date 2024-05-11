@@ -6,6 +6,6 @@ namespace WebApplication1.Data
     {
         [Key]
         public int idСтраны { get; set; }
-        public string Название { get; set; }
+        public string НазваниеСтраны { get; set; }
     }
 }
