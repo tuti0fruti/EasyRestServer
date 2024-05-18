@@ -1,5 +1,7 @@
-﻿using Microsoft.AspNetCore.Mvc;
+﻿using Azure.Core.Serialization;
+using Microsoft.AspNetCore.Mvc;
 using System.Globalization;
+using System.Numerics;
 using System.Security.Cryptography;
 using System.Text;
 using WebApplication1.Data;
@@ -7,7 +9,7 @@ using WebApplication1.Models;
 
 namespace WebApplication1.Controllers
 {
-    record Person(string Name, int Age);
+    record Person(string Name, int Age); // для теста
     public class LoginModel
     {
         public string Login { get; set; }
@@ -20,12 +22,11 @@ namespace WebApplication1.Controllers
     {
         //Получение доступа к БД
         private CinemaDBContex _cimenaDBContex;
-
         public FilmsController(CinemaDBContex cinemaDBContex)
         {
             _cimenaDBContex = cinemaDBContex;
         }
-
+        
         //Запрос на получение данных
         [HttpGet("GetFilmsNow/{Id}")]
         public IActionResult Get([FromRoute]int Id)
@@ -90,7 +91,7 @@ namespace WebApplication1.Controllers
                 return StatusCode(500, "An error has occurred");
             }
         }
-        
+        //Запрос на получение информации о фильме
         [HttpGet("GetInformationNameFilm")]
         public IActionResult Get()
         {
@@ -113,7 +114,7 @@ namespace WebApplication1.Controllers
                 return StatusCode(500, "An error has occurred");
             }
         }
-        
+        //Зарпос на получении информации по залу ДЛЯ СЕАНСА
         [HttpGet("GetInformationHall")]
         public IActionResult GetHall()
         {
@@ -136,7 +137,7 @@ namespace WebApplication1.Controllers
                 return StatusCode(500, "An error has occurred");
             }
         }
-
+        //Для входа
         [HttpPost("LoginAdm")]
         public IActionResult Login(LoginModel model)
         {
@@ -150,7 +151,6 @@ namespace WebApplication1.Controllers
             {
                 return BadRequest();
             }
-
 
             foreach (var item in users)
             {
@@ -169,8 +169,8 @@ namespace WebApplication1.Controllers
             
             return BadRequest();
         }
-        
-        //Проверка пароля
+
+        //Проверка пароля функция для LoginAdm
         public static bool VerifyPassword(string inputPassword, string hashedPassword)
         {
             // Создаем объект для вычисления хеша SHA256
@@ -222,7 +222,7 @@ namespace WebApplication1.Controllers
 
             return Ok();
         }
-        
+        //ДЛЯ СЕАНСА
         [HttpPost("CreateSession")]
         public IActionResult Create([FromBody] SessionRequest session)
         {
@@ -252,10 +252,96 @@ namespace WebApplication1.Controllers
             return Ok();
         }
 
+        [HttpPost("GetInformationSession")]
+        public async Task<IActionResult> PostAsync()
+        {
+            using (StreamReader reader = new StreamReader(Request.Body, Encoding.UTF8))
+            {
+                //полученная строка с клиента 
+                string requestBody = await reader.ReadToEndAsync();
+
+                string filmNameInfo = string.Empty, filmTimeInnfo = string.Empty;
+
+                filmNameInfo = requestBody.Substring(0, requestBody.Length - 8);
+                filmTimeInnfo = requestBody.Substring(requestBody.Length - 8);
 
 
+                //var query = from z in _cimenaDBContex.Зал
+                //            join s in _cimenaDBContex.Сеансы on z.idЗал equals s.Зал_idЗал into zS
+                //            from zs in zS.DefaultIfEmpty()
+                //            join m in _cimenaDBContex.Места on z.idЗал equals m.Зал_idЗал into zM
+                //            from zm in zM.DefaultIfEmpty()
+                //            where zs.Фильмы_idФильмы == (from f in _cimenaDBContex.Фильмы where f.Название == filmNameInfo select f.idФильмы).FirstOrDefault()
+                //               && zs.Время_Начала_Сеанса == TimeOnly.ParseExact(filmTimeInnfo, "HH:mm:ss")
+                //               && (from pb in _cimenaDBContex.Продажа_Билета where pb.Сеансы_idСеанса == zs.idСеанса select pb.Места_idМеста).Contains(zm.idМеста)
+                //            select new { 
+                //                hall = z.idЗал, idМеста = zm.idМеста 
+                //            };
+
+                //var query = from z in _cimenaDBContex.Зал
+                //            join s in _cimenaDBContex.Сеансы on z.idЗал equals s.Зал_idЗал into zS
+                //            from zs in zS.DefaultIfEmpty()
+                //            join m in _cimenaDBContex.Места on z.idЗал equals m.Зал_idЗал into zM
+                //            from zm in zM.DefaultIfEmpty()
+                //            where zs.Фильмы_idФильмы == (from f in _cimenaDBContex.Фильмы where f.Название == filmNameInfo select f.idФильмы).FirstOrDefault()
+                //               && zs.Время_Начала_Сеанса == TimeOnly.ParseExact(filmTimeInnfo, "HH:mm:ss")
+                //               && (from pb in _cimenaDBContex.Продажа_Билета where pb.Сеансы_idСеанса == zs.idСеанса select pb.Места_idМеста).Contains(zm.idМеста)
+                //            group zm.idМеста by z.idЗал into grouped
+                //            select new
+                //            {
+                //                hall = grouped.Key,
+                //                seats = grouped.ToArray()
+                //            };
+
+                var query = from z in _cimenaDBContex.Зал
+                            join s in _cimenaDBContex.Сеансы on z.idЗал equals s.Зал_idЗал into zS
+                            from zs in zS.DefaultIfEmpty()
+                            join m in _cimenaDBContex.Места on z.idЗал equals m.Зал_idЗал into zM
+                            from zm in zM.DefaultIfEmpty()
+                            where zs.Фильмы_idФильмы == (from f in _cimenaDBContex.Фильмы where f.Название == filmNameInfo select f.idФильмы).FirstOrDefault()
+                              && zs.Время_Начала_Сеанса == TimeOnly.ParseExact(filmTimeInnfo, "HH:mm:ss")
+                              && (from pb in _cimenaDBContex.Продажа_Билета where pb.Сеансы_idСеанса == zs.idСеанса select pb.Места_idМеста).Contains(zm.idМеста)
+                            group new { zm.idМеста, zs } by new { z.idЗал, zs.idСеанса } into grouped
+                            select new
+                            {
+                                hall = grouped.Key.idЗал,
+                                session = grouped.Key.idСеанса,
+                                seats = grouped.Select(g => g.idМеста).ToArray()
+                            };
 
 
+                return Ok(query);
+            }
+        }
+
+        [HttpPost("BuyTicket")]
+        public async Task<IActionResult> TicketAsync([FromBody] TicketsaleRequest Ticket)
+        {
+            foreach (var item in Ticket.seats)
+            {
+                TicketsaleData ticket = new TicketsaleData();
+                ticket.Дата_Оплата = DateTime.Now;
+                ticket.Почта_Покупателя = Ticket.email;
+                ticket.Скидки_idСкидка = Ticket.sale;
+                ticket.Места_idМеста = item;
+                ticket.Сеансы_idСеанса = Ticket.session;
+
+                try
+                {
+                    _cimenaDBContex.Продажа_Билета.Add(ticket);
+                    _cimenaDBContex.SaveChanges();
+                }
+                catch (Exception ex)
+                {
+                    return StatusCode(500, "An error has occurred");
+                }
+            }
+            
+
+
+            return Ok();
+            
+        }
 
 
 

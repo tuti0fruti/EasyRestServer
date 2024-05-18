@@ -21,6 +21,7 @@ namespace WebApplication1.Data
         public DbSet<TicketsaleData> Продажа_Билета { get; set; }
         public DbSet<DiscountsData> Скидки { get; set; }
         public DbSet<UsersData> Users { get; set; }
+        public DbSet<PlacesData> Места { get; set; }
 
         
     }
